@@ -1,0 +1,35 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Gesture Simon Says Game - ADITYA KUMAR BHARTIYA</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- AI MediaPipe Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <h1>AI Gesture Simon Says 🎮</h1>
+  <h3 style="color: #2ed573; margin-top: -8px; font-weight: 600;">
+    Created by: ADITYA KUMAR BHARTIYA (Roll No: 06)
+  </h3>
+  
+  <p id="status">Click 'Start Game' to begin!</p>
+  <button id="start-btn">Start Game</button>
+
+  <div class="game-container">
+    <div class="pad red" id="red">RED</div>
+    <div class="pad green" id="green">GREEN</div>
+    <div class="pad blue" id="blue">BLUE</div>
+    <div class="pad yellow" id="yellow">YELLOW</div>
+
+    <video id="webcam" autoplay playsinline></video>
+    <div id="hand-pointer"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
