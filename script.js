@@ -1,4 +1,4 @@
- const pads = {
+  const pads = {
   red: document.getElementById('red'),
   green: document.getElementById('green'),
   blue: document.getElementById('blue'),
@@ -16,40 +16,51 @@ let level = 0;
 let isPlayerTurn = false;
 let cooldown = false;
 
-// --- Web Speech API (Voice Recognition Setup) ---
+// --- Web Speech API (Aggressive Voice Control) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = false;
+  recognition.interimResults = true; // Fast & Realtime listening
   recognition.lang = 'en-US';
 
   recognition.onresult = (event) => {
     if (!isPlayerTurn || cooldown) return;
 
-    const lastIndex = event.results.length - 1;
-    const spokenText = event.results[lastIndex][0].transcript.trim().toLowerCase();
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const spokenText = event.results[i][0].transcript.toLowerCase().trim();
+      console.log("🎤 Hearing Sound:", spokenText);
 
-    console.log("🎤 Voice Detected:", spokenText);
-
-    if (spokenText.includes('red')) handlePlayerInput('red');
-    else if (spokenText.includes('green')) handlePlayerInput('green');
-    else if (spokenText.includes('blue')) handlePlayerInput('blue');
-    else if (spokenText.includes('yellow')) handlePlayerInput('yellow');
+      if (spokenText.includes('red') || spokenText.includes('read')) {
+        handlePlayerInput('red');
+        break;
+      } else if (spokenText.includes('green')) {
+        handlePlayerInput('green');
+        break;
+      } else if (spokenText.includes('blue') || spokenText.includes('blow')) {
+        handlePlayerInput('blue');
+        break;
+      } else if (spokenText.includes('yellow') || spokenText.includes('yello')) {
+        handlePlayerInput('yellow');
+        break;
+      }
+    }
   };
 
-  // Auto-Restart Mic if it stops working automatically
+  recognition.onerror = (err) => {
+    // Ignore silent intervals silently
+    if (err.error !== 'no-speech') {
+      console.log("Mic Event:", err.error);
+    }
+  };
+
   recognition.onend = () => {
     if (isPlayerTurn) {
       try { recognition.start(); } catch (e) {}
     }
   };
-
-  recognition.onerror = (err) => console.log("Mic Error:", err);
-} else {
-  alert("Voice Recognition aapke browser me support nahi kar raha. Chrome ya Edge use karein!");
 }
 
 // --- MediaPipe Hand Tracking Setup ---
@@ -76,7 +87,6 @@ const camera = new Camera(videoElement, {
 
 camera.start();
 
-// AI Tracking Results callback
 function onResults(results) {
   if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
     pointer.style.display = 'block';
@@ -110,7 +120,7 @@ function checkHover(x, y) {
   }
 }
 
-// --- Simon Says Game Logic ---
+// --- Simon Says Logic ---
 startBtn.addEventListener('click', startGame);
 
 function startGame() {
@@ -150,7 +160,6 @@ function playSequence() {
       setTimeout(() => {
         statusTxt.innerText = `Level ${level}: Your turn! Move hand OR say color!`;
         isPlayerTurn = true;
-        // Ensure mic is active on player's turn
         if (recognition) {
           try { recognition.start(); } catch (e) {}
         }
