@@ -1,35 +1,83 @@
- <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Gesture Simon Says Game - ADITYA KUMAR BHARTIYA</title>
-  <link rel="stylesheet" href="style.css">
 
-  <!-- AI MediaPipe Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI Gesture Simon Says - Aditya</title>
+
+    <link rel="stylesheet" href="mini.css">
+
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
 </head>
+
 <body>
 
-  <h1>AI Gesture Simon 🎮</h1>
-  <h3 style="color: #2ed573; margin-top: -8px; font-weight: 600;">
-    Created by: ADITYA KUMAR BHARTIYA (Roll No: 06)
-  </h3>
-  
-  <p id="status">Click 'Start Game' to begin!</p>
-  <button id="start-btn">Start Game</button>
+    <header>
+        <h1>AI Gesture Simon Says 🎮</h1>
 
-  <div class="game-container">
-    <div class="pad red" id="red">RED</div>
-    <div class="pad green" id="green">GREEN</div>
-    <div class="pad blue" id="blue">BLUE</div>
-    <div class="pad yellow" id="yellow">YELLOW</div>
+        <h3>Created by: ADITYA KUMAR BHARTIYA (Roll No: 06)</h3>
+    </header>
 
-    <video id="webcam" autoplay playsinline></video>
-    <div id="hand-pointer"></div>
-  </div>
+    <main>
 
-  <script src="script.js"></script>
+        <div class="game-info">
+
+            <p id="status">
+                Enable controls to begin!
+            </p>
+
+            <p id="level">
+                Level: 0
+            </p>
+
+            <button id="start-btn">
+                Enable Mic & Controls
+            </button>
+
+            <p class="instruction">
+                Show Both Open Palms OR Say START
+            </p>
+
+        </div>
+
+        <div class="game-container">
+
+            <div class="pad red" id="red">RED</div>
+
+            <div class="pad green" id="green">GREEN</div>
+
+            <div class="pad blue" id="blue">BLUE</div>
+
+            <div class="pad yellow" id="yellow">YELLOW</div>
+
+            <video id="webcam" autoplay playsinline></video>
+
+            <div id="hand-pointer"></div>
+
+        </div>
+
+        <div class="help">
+
+            <h3>How to Play?</h3>
+
+            <p>🎤 Speak: RED, GREEN, BLUE, YELLOW</p>
+
+            <p>✋ Move your index finger over the colours</p>
+
+            <p>👋 Show both open palms to start</p>
+
+        </div>
+
+    </main>
+
+    <script src="mini.js"></script>
+
 </body>
+
 </html>
