@@ -1,72 +1,158 @@
+
+* {
+    box-sizing: border-box;
+}
+
 body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  background-color: #1a1a1a;
-  color: white;
-  margin: 0;
-  padding: 20px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #111827;
+    color: white;
+    margin: 0;
+    padding: 20px;
 }
 
-.game-container {
-  position: relative;
-  width: 400px;
-  height: 400px;
-  margin: 20px auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+header h1 {
+    color: #2ed573;
+    font-size: 32px;
 }
 
-.pad {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: bold;
-  border-radius: 15px;
-  opacity: 0.6;
-  transition: opacity 0.2s, transform 0.1s;
+header h3 {
+    color: #a5f3c5;
+    font-size: 16px;
 }
 
-.pad.active {
-  opacity: 1;
-  transform: scale(1.05);
-  box-shadow: 0 0 20px white;
+.game-info {
+    margin: 25px auto;
 }
 
-.red { background-color: #ff4757; }
-.green { background-color: #2ed573; }
-.blue { background-color: #1e90ff; }
-.yellow { background-color: #ffa502; }
-
-#webcam {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  opacity: 0.15; /* Subtle background camera view */
-  pointer-events: none;
-  transform: scaleX(-1); /* Mirror camera */
+#status {
+    font-size: 20px;
+    font-weight: bold;
+    color: #facc15;
+    min-height: 28px;
 }
 
-#hand-pointer {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background-color: white;
-  border: 2px solid red;
-  border-radius: 50%;
-  pointer-events: none;
-  display: none;
-  transform: translate(-50%, -50%);
-  z-index: 10;
+#level {
+    font-size: 18px;
+    color: #38bdf8;
 }
 
 button {
-  padding: 10px 20px;
-  font-size: 1rem;
-  cursor: pointer;
-  border: none;
-  border-radius: 5px;
-  background-color: #2ed573;
-  color: white;
-} 
+    padding: 13px 25px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    background: #2ed573;
+    color: #111827;
+    margin: 10px;
+}
+
+button:hover {
+    background: #20bf6b;
+    transform: scale(1.04);
+}
+
+.instruction {
+    color: #cbd5e1;
+    font-size: 14px;
+}
+
+.game-container {
+    position: relative;
+    width: min(400px, 90vw);
+    aspect-ratio: 1 / 1;
+    margin: 25px auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.pad {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(18px, 5vw, 26px);
+    font-weight: bold;
+    border-radius: 18px;
+    opacity: 0.65;
+    z-index: 1;
+    transition: 0.2s;
+    user-select: none;
+}
+
+.pad.active {
+    opacity: 1;
+    transform: scale(1.04);
+    box-shadow: 0 0 25px white;
+}
+
+.red {
+    background: #ff4757;
+}
+
+.green {
+    background: #2ed573;
+}
+
+.blue {
+    background: #1e90ff;
+}
+
+.yellow {
+    background: #ffa502;
+}
+
+#webcam {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.13;
+    transform: scaleX(-1);
+    pointer-events: none;
+    z-index: 2;
+}
+
+#hand-pointer {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: white;
+    border: 3px solid red;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.help {
+    margin: 30px auto;
+    padding: 15px;
+    max-width: 450px;
+    background: #1e293b;
+    border-radius: 12px;
+    color: #cbd5e1;
+}
+
+.help h3 {
+    color: #2ed573;
+}
+
+@media (max-width: 480px) {
+
+    body {
+        padding: 10px;
+    }
+
+    header h1 {
+        font-size: 25px;
+    }
+
+    header h3 {
+        font-size: 13px;
+    }
+}
