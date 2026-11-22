@@ -1,201 +1,752 @@
-  const pads = {
-  red: document.getElementById('red'),
-  green: document.getElementById('green'),
-  blue: document.getElementById('blue'),
-  yellow: document.getElementById('yellow')
+/* ==========================================
+   AI GESTURE SIMON SAYS GAME
+   Voice + Hand Tracking + Auto Mic Restart
+========================================== */
+
+// ---------- HTML ELEMENTS ----------
+
+const pads = {
+    red: document.getElementById("red"),
+    green: document.getElementById("green"),
+    blue: document.getElementById("blue"),
+    yellow: document.getElementById("yellow")
 };
 
-const statusTxt = document.getElementById('status');
-const startBtn = document.getElementById('start-btn');
-const pointer = document.getElementById('hand-pointer');
-const videoElement = document.getElementById('webcam');
+const statusTxt = document.getElementById("status");
+const levelTxt = document.getElementById("level");
+const startBtn = document.getElementById("start-btn");
+const pointer = document.getElementById("hand-pointer");
+const video = document.getElementById("webcam");
+const board = document.querySelector(".game-container");
+
+
+// ---------- GAME VARIABLES ----------
 
 let sequence = [];
 let playerSequence = [];
 let level = 0;
+
+let gameRunning = false;
 let isPlayerTurn = false;
 let cooldown = false;
+let controlsEnabled = false;
 
-// --- Web Speech API (Aggressive Voice Control) ---
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition;
+let micRunning = false;
+let micStarting = false;
+let micBlocked = false;
+let restartTimer = null;
+let restartAttempts = 0;
+let recognitionSessionId = 0;
+
+let palmStartTime = null;
+let gameStarting = false;
+
+let hoveredColor = null;
+let hoverStartTime = 0;
+let handInputDone = false;
+
+
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+
+function updateStatus(message) {
+    if (statusTxt) statusTxt.innerText = message;
+}
+
+function updateLevel() {
+    if (levelTxt) levelTxt.innerText = "Level: " + level;
+}
+
+
+// ==========================================
+// VOICE RECOGNITION
+// ==========================================
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+let recognition = null;
+
+function createRecognitionInstance() {
+    const rec = new SpeechRecognition();
+    const sessionId = ++recognitionSessionId;
+
+    rec.lang = "en-IN";
+    rec.continuous = true;
+    rec.interimResults = false;
+
+    rec.onstart = () => {
+        if (sessionId !== recognitionSessionId) return;
+
+        micRunning = true;
+        micStarting = false;
+        restartAttempts = 0;
+
+        console.log("Microphone ON");
+    };
+
+    rec.onresult = (event) => {
+        if (sessionId !== recognitionSessionId) return;
+
+        for (
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+        ) {
+            if (!event.results[i].isFinal) continue;
+
+            const spokenText =
+                event.results[i][0].transcript
+                    .toLowerCase()
+                    .trim();
+
+            if (!spokenText) continue;
+
+            console.log("You said:", spokenText);
+
+            handleVoiceCommand(spokenText);
+        }
+    };
+
+    rec.onerror = (event) => {
+        if (sessionId !== recognitionSessionId) return;
+
+        console.log("Mic Error:", event.error);
+
+        micRunning = false;
+        micStarting = false;
+
+        if (
+            event.error === "not-allowed" ||
+            event.error === "service-not-allowed"
+        ) {
+            clearTimeout(restartTimer);
+            micBlocked = true;
+            controlsEnabled = false;
+
+            updateStatus("Please allow microphone permission!");
+
+            if (startBtn) {
+                startBtn.innerText = "Enable Mic & Controls";
+            }
+
+            return;
+        }
+
+        // Temporary errors like "no-speech", "network", "audio-capture", "aborted"
+        // will be handled cleanly by onend.
+    };
+
+    rec.onend = () => {
+        if (sessionId !== recognitionSessionId) return;
+
+        micRunning = false;
+        micStarting = false;
+
+        console.log("Mic stopped");
+
+        if (controlsEnabled && !micBlocked) {
+            scheduleMicRestart();
+        }
+    };
+
+    return rec;
+}
 
 if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true; // Fast & Realtime listening
-  recognition.lang = 'en-US';
-
-  recognition.onresult = (event) => {
-    if (!isPlayerTurn || cooldown) return;
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const spokenText = event.results[i][0].transcript.toLowerCase().trim();
-      console.log("🎤 Hearing Sound:", spokenText);
-
-      if (spokenText.includes('red') || spokenText.includes('read')) {
-        handlePlayerInput('red');
-        break;
-      } else if (spokenText.includes('green')) {
-        handlePlayerInput('green');
-        break;
-      } else if (spokenText.includes('blue') || spokenText.includes('blow')) {
-        handlePlayerInput('blue');
-        break;
-      } else if (spokenText.includes('yellow') || spokenText.includes('yello')) {
-        handlePlayerInput('yellow');
-        break;
-      }
-    }
-  };
-
-  recognition.onerror = (err) => {
-    // Ignore silent intervals silently
-    if (err.error !== 'no-speech') {
-      console.log("Mic Event:", err.error);
-    }
-  };
-
-  recognition.onend = () => {
-    if (isPlayerTurn) {
-      try { recognition.start(); } catch (e) {}
-    }
-  };
+    recognition = createRecognitionInstance();
+} else {
+    updateStatus("Voice recognition requires Chrome or Edge.");
 }
 
-// --- MediaPipe Hand Tracking Setup ---
-const hands = new Hands({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-});
 
-hands.setOptions({
-  maxNumHands: 1,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
-});
+// ==========================================
+// MICROPHONE AUTO RESTART
+// ==========================================
 
-hands.onResults(onResults);
+function scheduleMicRestart(customDelay = null) {
+    clearTimeout(restartTimer);
 
-const camera = new Camera(videoElement, {
-  onFrame: async () => {
-    await hands.send({ image: videoElement });
-  },
-  width: 400,
-  height: 400
-});
+    if (!controlsEnabled || micBlocked) return;
 
-camera.start();
+    restartAttempts = Math.min(restartAttempts + 1, 6);
+    const backoffDelay = Math.min(350 + (restartAttempts - 1) * 250, 1800);
+    const delay = customDelay !== null ? customDelay : backoffDelay;
 
-function onResults(results) {
-  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-    pointer.style.display = 'block';
-    const landmarks = results.multiHandLandmarks[0];
-    
-    const indexTip = landmarks[8];
-    const x = (1 - indexTip.x) * 400; 
-    const y = indexTip.y * 400;
+    restartTimer = setTimeout(() => {
+        startMicrophone();
+    }, delay);
+}
 
-    pointer.style.left = `${x}px`;
-    pointer.style.top = `${y}px`;
 
-    if (isPlayerTurn && !cooldown) {
-      checkHover(x, y);
+function startMicrophone() {
+    if (
+        !SpeechRecognition ||
+        !controlsEnabled ||
+        micBlocked ||
+        micRunning ||
+        micStarting
+    ) {
+        return;
     }
-  } else {
-    pointer.style.display = 'none';
-  }
+
+    if (!recognition) {
+        recognition = createRecognitionInstance();
+    }
+
+    try {
+        micStarting = true;
+        recognition.start();
+    } catch (error) {
+        micStarting = false;
+
+        console.log("Mic start error:", error.message);
+
+        // If recognition is stuck in an invalid state, recreate a clean instance
+        if (error.name === "InvalidStateError") {
+            recognition = createRecognitionInstance();
+        }
+
+        scheduleMicRestart(600);
+    }
 }
 
-function checkHover(x, y) {
-  let hoveredPad = null;
 
-  if (x >= 0 && x < 200 && y >= 0 && y < 200) hoveredPad = 'red';
-  else if (x >= 200 && x <= 400 && y >= 0 && y < 200) hoveredPad = 'green';
-  else if (x >= 0 && x < 200 && y >= 200 && y <= 400) hoveredPad = 'blue';
-  else if (x >= 200 && x <= 400 && y >= 200 && y <= 400) hoveredPad = 'yellow';
+// ==========================================
+// VOICE COLOUR DETECTION
+// ==========================================
 
-  if (hoveredPad) {
-    handlePlayerInput(hoveredPad);
-  }
+function detectColor(text) {
+
+    const words = text
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/);
+
+    const variations = {
+
+        red: ["red", "rad", "redd", "rid"],
+
+        green: [
+            "green", "geen", "grean",
+            "gren", "grin", "greeen"
+        ],
+
+        blue: [
+            "blue", "blu", "bloo",
+            "bulu", "bluu", "blew"
+        ],
+
+        yellow: [
+            "yellow", "yallow", "yelo",
+            "yello", "yelow", "yellu"
+        ]
+    };
+
+    for (const word of words) {
+
+        for (const color in variations) {
+
+            if (variations[color].includes(word)) {
+                return color;
+            }
+        }
+    }
+
+    return null;
 }
 
-// --- Simon Says Logic ---
-startBtn.addEventListener('click', startGame);
+
+// ==========================================
+// VOICE COMMAND HANDLER
+// ==========================================
+
+function handleVoiceCommand(text) {
+
+    // START COMMAND
+
+    if (
+        controlsEnabled &&
+        !gameRunning &&
+        /\b(start|begin|play)\b/.test(text)
+    ) {
+
+        startGame();
+        return;
+    }
+
+    // COLOUR COMMAND
+
+    if (!gameRunning || !isPlayerTurn || cooldown) {
+        return;
+    }
+
+    const color = detectColor(text);
+
+    if (color) {
+
+        console.log("Voice detected:", color);
+
+        handlePlayerInput(color);
+    }
+}
+
+
+// ==========================================
+// ENABLE CONTROLS BUTTON
+// ==========================================
+
+if (startBtn) {
+
+    startBtn.addEventListener("click", () => {
+
+        if (!controlsEnabled) {
+
+            controlsEnabled = true;
+            micBlocked = false;
+            restartAttempts = 0;
+
+            startBtn.innerText = "Start Game";
+
+            updateStatus('Say "START" or click Start Game');
+
+            startMicrophone();
+
+        } else {
+
+            startGame();
+        }
+    });
+}
+
+
+// ==========================================
+// START GAME
+// ==========================================
 
 function startGame() {
-  sequence = [];
-  level = 0;
-  cooldown = false;
-  startBtn.style.display = 'none';
 
-  if (recognition) {
-    try { recognition.start(); } catch (e) {}
-  }
+    if (gameRunning || !controlsEnabled) return;
 
-  nextRound();
-}
+    clearTimeout(restartTimer);
+    restartAttempts = 0;
 
-function nextRound() {
-  playerSequence = [];
-  level++;
-  statusTxt.innerText = `Level ${level}: Watch Simon!`;
-  isPlayerTurn = false;
-  cooldown = false;
+    sequence = [];
+    playerSequence = [];
 
-  const colors = ['red', 'green', 'blue', 'yellow'];
-  const randomColor = colors[Math.floor(Math.random() * 4)];
-  sequence.push(randomColor);
+    level = 0;
 
-  playSequence();
-}
-
-function playSequence() {
-  let i = 0;
-  const interval = setInterval(() => {
-    flashPad(sequence[i]);
-    i++;
-    if (i >= sequence.length) {
-      clearInterval(interval);
-      setTimeout(() => {
-        statusTxt.innerText = `Level ${level}: Your turn! Move hand OR say color!`;
-        isPlayerTurn = true;
-        if (recognition) {
-          try { recognition.start(); } catch (e) {}
-        }
-      }, 600);
-    }
-  }, 800);
-}
-
-function flashPad(color) {
-  pads[color].classList.add('active');
-  setTimeout(() => pads[color].classList.remove('active'), 400);
-}
-
-function handlePlayerInput(color) {
-  if (cooldown) return; 
-  cooldown = true; 
-
-  flashPad(color);
-  playerSequence.push(color);
-
-  const currentStep = playerSequence.length - 1;
-
-  if (playerSequence[currentStep] !== sequence[currentStep]) {
-    statusTxt.innerText = `❌ Game Over! Reached Level ${level}`;
-    startBtn.innerText = 'Play Again';
-    startBtn.style.display = 'inline-block';
+    gameRunning = true;
     isPlayerTurn = false;
     cooldown = false;
-    return;
-  }
 
-  if (playerSequence.length === sequence.length) {
-    isPlayerTurn = false;
-    statusTxt.innerText = `Good job! Next round...`;
-    setTimeout(nextRound, 1200);
-  } else {
-    setTimeout(() => { cooldown = false; }, 1200);
-  }
+    hoveredColor = null;
+    handInputDone = false;
+
+    updateLevel();
+
+    if (startBtn) {
+        startBtn.innerText = "Game Running";
+    }
+
+    updateStatus("Get Ready!");
+
+    startMicrophone();
+
+    setTimeout(() => {
+        nextRound();
+    }, 800);
 }
+
+
+// ==========================================
+// NEXT ROUND
+// ==========================================
+
+function nextRound() {
+
+    if (!gameRunning) return;
+
+    playerSequence = [];
+
+    level++;
+
+    updateLevel();
+
+    isPlayerTurn = false;
+    cooldown = false;
+
+    hoveredColor = null;
+    handInputDone = false;
+
+    updateStatus("Level " + level + ": Watch Simon!");
+
+    const colors = ["red", "green", "blue", "yellow"];
+
+    const randomColor =
+        colors[Math.floor(Math.random() * colors.length)];
+
+    sequence.push(randomColor);
+
+    playSequence();
+}
+
+
+// ==========================================
+// PLAY SIMON SEQUENCE
+// ==========================================
+
+function playSequence() {
+
+    let index = 0;
+
+    const interval = setInterval(() => {
+
+        if (!gameRunning) {
+            clearInterval(interval);
+            return;
+        }
+
+        flashPad(sequence[index]);
+
+        index++;
+
+        if (index >= sequence.length) {
+
+            clearInterval(interval);
+
+            setTimeout(() => {
+
+                if (!gameRunning) return;
+
+                isPlayerTurn = true;
+                cooldown = false;
+
+                hoveredColor = null;
+                handInputDone = false;
+
+                updateStatus("Your Turn! Speak or Move Finger");
+
+            }, 700);
+        }
+
+    }, 900);
+}
+
+
+// ==========================================
+// FLASH PAD
+// ==========================================
+
+function flashPad(color) {
+
+    const pad = pads[color];
+
+    if (!pad) return;
+
+    pad.classList.add("active");
+
+    setTimeout(() => {
+        pad.classList.remove("active");
+    }, 400);
+}
+
+
+// ==========================================
+// PLAYER INPUT
+// ==========================================
+
+function handlePlayerInput(color) {
+
+    if (!gameRunning || !isPlayerTurn || cooldown) {
+        return;
+    }
+
+    if (!pads[color]) return;
+
+    cooldown = true;
+
+    flashPad(color);
+
+    playerSequence.push(color);
+
+    const currentStep = playerSequence.length - 1;
+
+    // WRONG ANSWER
+
+    if (playerSequence[currentStep] !== sequence[currentStep]) {
+
+        gameOver();
+        return;
+    }
+
+    // COMPLETE SEQUENCE
+
+    if (playerSequence.length === sequence.length) {
+
+        isPlayerTurn = false;
+
+        updateStatus("Correct! Next Level...");
+
+        setTimeout(() => {
+
+            if (gameRunning) {
+                nextRound();
+            }
+
+        }, 1200);
+
+    } else {
+
+        setTimeout(() => {
+            cooldown = false;
+        }, 450);
+    }
+}
+
+
+// ==========================================
+// GAME OVER
+// ==========================================
+
+function gameOver() {
+
+    gameRunning = false;
+    isPlayerTurn = false;
+    cooldown = false;
+
+    updateStatus("GAME OVER! Reached Level " + level);
+
+    if (startBtn) {
+        startBtn.innerText = "Play Again";
+    }
+
+    if (controlsEnabled && !micBlocked && !micRunning && !micStarting) {
+        scheduleMicRestart(400);
+    }
+
+    console.log("Game Over. Level:", level);
+}
+
+
+// ==========================================
+// MEDIAPIPE HAND TRACKING
+// ==========================================
+
+let hands = null;
+let camera = null;
+
+if (
+    typeof Hands !== "undefined" &&
+    typeof Camera !== "undefined" &&
+    video &&
+    board
+) {
+
+    hands = new Hands({
+
+        locateFile: (file) => {
+            return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file;
+        }
+
+    });
+
+    hands.setOptions({
+
+        maxNumHands: 2,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+
+    });
+
+    hands.onResults(onResults);
+
+
+    // CAMERA START
+
+    camera = new Camera(video, {
+
+        onFrame: async () => {
+            await hands.send({ image: video });
+        },
+
+        width: 640,
+        height: 480
+
+    });
+
+    camera.start().catch((error) => {
+
+        console.log("Camera Error:", error);
+
+        updateStatus("Please allow camera permission.");
+
+    });
+
+} else {
+
+    console.log("MediaPipe libraries or game board not found.");
+
+    updateStatus("Hand tracking libraries could not load.");
+}
+
+
+// ==========================================
+// OPEN PALM DETECTION
+// ==========================================
+
+function isOpenPalm(hand) {
+
+    const fingers = [
+        [8, 6],
+        [12, 10],
+        [16, 14],
+        [20, 18]
+    ];
+
+    return fingers.every(([tip, joint]) => {
+        return hand[tip].y < hand[joint].y;
+    });
+}
+
+
+// ==========================================
+// HAND RESULTS
+// ==========================================
+
+function onResults(results) {
+
+    const detectedHands =
+        results.multiHandLandmarks || [];
+
+
+    // FINGER POINTER
+
+    if (detectedHands.length > 0) {
+
+        const indexTip = detectedHands[0][8];
+
+        const rect = board.getBoundingClientRect();
+
+        const x = (1 - indexTip.x) * rect.width;
+        const y = indexTip.y * rect.height;
+
+        if (pointer) {
+
+            pointer.style.display = "block";
+            pointer.style.left = x + "px";
+            pointer.style.top = y + "px";
+        }
+
+        // HAND INPUT
+
+        if (gameRunning && isPlayerTurn && !cooldown) {
+            checkHover(x, y, rect);
+        }
+
+    } else {
+
+        if (pointer) {
+            pointer.style.display = "none";
+        }
+
+        hoveredColor = null;
+        handInputDone = false;
+    }
+
+
+    // TWO OPEN PALMS TO START
+
+    if (
+        controlsEnabled &&
+        !gameRunning &&
+        !gameStarting
+    ) {
+
+        const bothOpen =
+            detectedHands.length === 2 &&
+            detectedHands.every(isOpenPalm);
+
+        if (bothOpen) {
+
+            if (palmStartTime === null) {
+                palmStartTime = Date.now();
+            }
+
+            const duration = Date.now() - palmStartTime;
+
+            updateStatus(
+                "Keep palms open: " +
+                Math.min(100, Math.floor(duration / 15)) +
+                "%"
+            );
+
+            if (duration >= 1500) {
+
+                palmStartTime = null;
+                gameStarting = true;
+
+                startGame();
+
+                setTimeout(() => {
+                    gameStarting = false;
+                }, 2000);
+            }
+
+        } else {
+
+            palmStartTime = null;
+        }
+    }
+}
+
+
+// ==========================================
+// HAND COLOUR SELECTION
+// ==========================================
+
+function checkHover(x, y, rect) {
+
+    const middleX = rect.width / 2;
+    const middleY = rect.height / 2;
+
+    let color;
+
+    if (x < middleX && y < middleY) {
+        color = "red";
+    }
+    else if (x >= middleX && y < middleY) {
+        color = "green";
+    }
+    else if (x < middleX && y >= middleY) {
+        color = "blue";
+    }
+    else {
+        color = "yellow";
+    }
+
+    // Only one input for each entry into a colour area.
+
+    if (color !== hoveredColor) {
+
+        hoveredColor = color;
+        handInputDone = false;
+    }
+
+    if (!handInputDone) {
+
+        handInputDone = true;
+
+        handlePlayerInput(color);
+    }
+}
+
+
+// ==========================================
+// END OF GAME
+// ==========================================
+
+console.log("AI Gesture Simon Says loaded successfully!");
